@@ -1,0 +1,397 @@
+package com.v2ray.ang.ui.main
+
+import android.content.Intent
+import android.content.res.Configuration
+import android.net.VpnService
+import android.os.Build
+import android.os.Bundle
+import android.view.KeyEvent
+import androidx.activity.compose.BackHandler
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import com.v2ray.ang.ui.compose.MatixIntro
+import com.v2ray.ang.ui.compose.MatixIntroState
+import com.v2ray.ang.ui.compose.matixBackdrop
+import com.v2ray.ang.ui.welcome.WelcomeActivity
+import androidx.lifecycle.lifecycleScope
+import com.v2ray.ang.AngApplication
+import com.v2ray.ang.AppConfig
+import com.v2ray.ang.R
+import com.v2ray.ang.core.LauncherManager
+import com.v2ray.ang.dto.entities.ProfileItem
+import com.v2ray.ang.enums.EConfigType
+import com.v2ray.ang.enums.PermissionType
+import com.v2ray.ang.extension.toast
+import com.v2ray.ang.extension.toastError
+import com.v2ray.ang.extension.toastSuccess
+import com.v2ray.ang.handler.AngConfigManager
+import com.v2ray.ang.handler.MatixAppSettings
+import com.v2ray.ang.handler.MmkvManager
+import com.v2ray.ang.handler.SettingsChangeManager
+import com.v2ray.ang.handler.SettingsManager
+import com.v2ray.ang.handler.SubscriptionInfoParser
+import com.v2ray.ang.ui.AboutActivity
+import com.v2ray.ang.ui.backup.BackupActivity
+import com.v2ray.ang.ui.base.HelperBaseComponentActivity
+import com.v2ray.ang.ui.checkupdate.CheckUpdateActivity
+import com.v2ray.ang.ui.logcat.LogcatActivity
+import com.v2ray.ang.ui.perappproxy.PerAppProxyActivity
+import com.v2ray.ang.ui.routing.RoutingSettingActivity
+import com.v2ray.ang.ui.server.ProfileEditorResult
+import com.v2ray.ang.ui.server.ServerAetherActivity
+import com.v2ray.ang.ui.server.ServerCustomConfigActivity
+import com.v2ray.ang.ui.server.ServerGroupActivity
+import com.v2ray.ang.ui.server.ServerHttpActivity
+import com.v2ray.ang.ui.server.ServerHysteria2Activity
+import com.v2ray.ang.ui.server.ServerMasqueActivity
+import com.v2ray.ang.ui.server.ServerProxyChainActivity
+import com.v2ray.ang.ui.server.ServerShadowsocksActivity
+import com.v2ray.ang.ui.server.ServerSocksActivity
+import com.v2ray.ang.ui.server.ServerTrojanActivity
+import com.v2ray.ang.ui.server.ServerVlessActivity
+import com.v2ray.ang.ui.server.ServerVmessActivity
+import com.v2ray.ang.ui.server.ServerWireguardActivity
+import com.v2ray.ang.ui.settings.SettingsActivity
+import com.v2ray.ang.ui.subscription.SubSettingActivity
+import com.v2ray.ang.ui.userasset.UserAssetActivity
+import com.v2ray.ang.util.LogUtil
+import com.v2ray.ang.util.Utils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+abstract class BaseMainActivity : HelperBaseComponentActivity() {
+
+    private var forwardingToTv = false
+    // Only the existing launcher entry resolves the device type. The TV activity never routes again.
+    protected open fun televisionDestination(): Intent? = null
+
+    private val mainViewModel: MainViewModel by viewModels {
+        MainViewModel.Factory(application, MainRepository(application as AngApplication))
+    }
+
+    private val requestVpnPermission =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            if (it.resultCode == RESULT_OK) startV2Ray()
+        }
+
+    private val profileEditorLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode != RESULT_OK) return@registerForActivityResult
+            val data = result.data ?: return@registerForActivityResult
+            val action = data.getStringExtra(ProfileEditorResult.EXTRA_ACTION)
+                ?: return@registerForActivityResult
+            if (action != ProfileEditorResult.ACTION_SAVED &&
+                action != ProfileEditorResult.ACTION_DELETED
+            ) return@registerForActivityResult
+            val restartService = data.getBooleanExtra(
+                ProfileEditorResult.EXTRA_RESTART_SERVICE, false
+            )
+            val selectedProfileSaved = action == ProfileEditorResult.ACTION_SAVED &&
+                    data.getStringExtra(ProfileEditorResult.EXTRA_GUID) == mainViewModel.uiState.value.selectedGuid
+            mainViewModel.onAction(MainAction.RefreshGroups)
+            if (restartService || selectedProfileSaved) LauncherManager.restartService(this)
+        }
+
+    private val settingsActivityLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            val restartService = SettingsChangeManager.consumeRestartService()
+            val refreshGroups = SettingsChangeManager.consumeSetupGroupTab()
+            mainViewModel.refreshUiSettings()
+            if (refreshGroups) mainViewModel.onAction(MainAction.RefreshGroups)
+            if (restartService) LauncherManager.restartService(this)
+        }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        val destination = televisionDestination()
+        forwardingToTv = destination != null
+        super.onCreate(savedInstanceState)
+        if (destination != null) {
+            startActivity(destination)
+            finish()
+            return
+        }
+        // Matix net: a first launch with no subscription and no server opens the welcome screen.
+        if (!MatixAppSettings.welcomeDone() && !hasAnyServer() &&
+            !intent.getBooleanExtra(AppConfig.EXTRA_REFRESH_AFTER_IMPORT, false)
+        ) {
+            forwardingToTv = true
+            startActivity(Intent(this, WelcomeActivity::class.java))
+            finish()
+            return
+        }
+        mainViewModel.onAction(MainAction.Initialize)
+
+        checkAndRequestPermission(PermissionType.POST_NOTIFICATIONS) {}
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // The service can have gone away while the screen was not shown, without a word if its process died.
+        mainViewModel.onAction(MainAction.RefreshServiceState)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra(AppConfig.EXTRA_REFRESH_AFTER_IMPORT, false)) {
+            mainViewModel.onAction(MainAction.RefreshGroups)
+        }
+    }
+
+    // Matix net: whether a subscription or a server already exists, read from storage, never from the screen.
+    private fun hasAnyServer(): Boolean = try {
+        MmkvManager.decodeSubscriptions().isNotEmpty() || MmkvManager.decodeServerList("").isNotEmpty()
+    } catch (e: Exception) {
+        LogUtil.e(AppConfig.TAG, "Could not tell whether a server exists", e)
+        true
+    }
+
+    @Composable
+    override fun ScreenContent() {
+        if (forwardingToTv) return
+        BackHandler { moveTaskToBack(false) }
+        var introDone by remember { mutableStateOf(MatixIntroState.shown) }
+        Box(Modifier.fillMaxSize().matixBackdrop()) {
+            MainContent(mainViewModel, ::handleMainAction, ::navigateTo)
+            if (!introDone) {
+                MatixIntro(onFinished = { MatixIntroState.shown = true; introDone = true })
+            }
+        }
+    }
+
+    @Composable
+    internal abstract fun MainContent(
+        viewModel: MainViewModel,
+        onAction: (MainAction) -> Unit,
+        onNavigate: (MainDestination) -> Unit
+    )
+
+    private fun handleMainAction(action: MainAction) {
+        when (action) {
+            MainAction.ToggleService -> handleFabAction()
+            MainAction.TestCurrentServer -> handleLayoutTestClick()
+            MainAction.ImportQRcode -> importQRcode()
+            MainAction.ImportClipboard -> importClipboard()
+            MainAction.ImportConfigLocal -> importConfigLocal()
+            is MainAction.ImportManually -> importManually(action.type)
+            MainAction.RestartService -> LauncherManager.restartServiceOrStart(this, ::requestServiceStart)
+            MainAction.LocateSelectedServer -> mainViewModel.triggerLocateSelectedServer()
+            MainAction.Exit -> {
+                LauncherManager.stopService(this)
+                finishAndRemoveTask()
+            }
+            is MainAction.SelectServer -> setSelectServer(action.guid)
+            is MainAction.EditServer -> editServer(action.guid, action.profile)
+            is MainAction.ShareClipboard -> shareToClipboard(action.guid)
+            is MainAction.ShareFullContent -> shareFullContentAsync(action.guid)
+            is MainAction.OpenSubscriptionLink -> openSubscriptionLink(action.url)
+            is MainAction.CopyDonationAddress -> copyDonationAddress(action.address)
+            MainAction.OpenAuthorTelegram -> Utils.openUri(this, AppConfig.AUTHOR_TELEGRAM_URL)
+            MainAction.BuySubscription -> Utils.openUri(this, AppConfig.MATIX_BOT_URL)
+            MainAction.ToggleTheme -> MatixAppSettings.toggleTheme(this)
+            MainAction.ToggleLanguage -> MatixAppSettings.toggleLanguage()
+            else -> mainViewModel.onAction(action)
+        }
+    }
+
+    private fun shareToClipboard(guid: String): Boolean =
+        AngConfigManager.share2Clipboard(this, guid) == 0
+
+    private fun shareFullContentAsync(guid: String) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            val result = AngConfigManager.shareFullContent2Clipboard(this@BaseMainActivity, guid)
+            withContext(Dispatchers.Main) {
+                if (result == 0) toastSuccess(R.string.toast_success)
+                else toastError(R.string.toast_failure)
+            }
+        }
+    }
+
+    private fun openSubscriptionLink(url: String) {
+        // Links come from a remote panel, so only http(s) and tg:// are ever handed to ACTION_VIEW.
+        val safeUrl = SubscriptionInfoParser.sanitizeLink(url) ?: return
+        Utils.openUri(this, safeUrl)
+    }
+
+    /** PattNG: puts a donation address on the clipboard just as the Donate dialog shows it. */
+    private fun copyDonationAddress(address: String) {
+        Utils.setClipboard(this, address)
+        toastSuccess(R.string.toast_success)
+    }
+
+    private fun navigateTo(destination: MainDestination) {
+        val intent = when (destination) {
+            MainDestination.Subscriptions -> Intent(this, SubSettingActivity::class.java)
+            MainDestination.PerAppProxy -> Intent(this, PerAppProxyActivity::class.java)
+            MainDestination.Routing -> Intent(this, RoutingSettingActivity::class.java)
+            MainDestination.UserAssets -> Intent(this, UserAssetActivity::class.java)
+            MainDestination.Settings -> Intent(this, SettingsActivity::class.java)
+            MainDestination.Logcat -> Intent(this, LogcatActivity::class.java)
+            MainDestination.CheckUpdate -> Intent(this, CheckUpdateActivity::class.java)
+            MainDestination.BackupRestore -> Intent(this, BackupActivity::class.java)
+            MainDestination.About -> Intent(this, AboutActivity::class.java)
+            MainDestination.TelegramChannel -> {
+                Utils.openUri(this, AppConfig.TG_CHANNEL_URL)
+                return
+            }
+        }
+        settingsActivityLauncher.launch(intent)
+    }
+
+    private fun handleFabAction() {
+        if (mainViewModel.uiState.value.isRunning) {
+            LauncherManager.stopService(this)
+            // A service whose process died takes no stop and answers nothing; asking for its state right
+            // after lets that silence show the screen as stopped instead of leaving it connected.
+            mainViewModel.onAction(MainAction.RefreshServiceState)
+        } else {
+            requestServiceStart()
+        }
+    }
+
+    private fun requestServiceStart() {
+        if (!SettingsManager.isVpnMode()) {
+            startV2Ray()
+            return
+        }
+        val intent = VpnService.prepare(this)
+        if (intent == null) startV2Ray() else requestVpnPermission.launch(intent)
+    }
+
+    private fun handleLayoutTestClick() {
+        if (mainViewModel.uiState.value.isRunning) {
+            mainViewModel.testCurrentServerRealPing()
+        }
+    }
+
+    private fun startV2Ray() {
+        if (mainViewModel.uiState.value.selectedGuid.isNullOrEmpty()) {
+            toast(R.string.title_file_chooser)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.CINNAMON_BUN
+        ) {
+            checkAndRequestPermission(PermissionType.ACCESS_LOCAL_NETWORK) {}
+        }
+        LauncherManager.startService(this)
+    }
+
+    private fun importManually(createConfigType: Int) {
+        val intent = when (createConfigType) {
+            EConfigType.POLICYGROUP.value -> Intent(this, ServerGroupActivity::class.java)
+            EConfigType.PROXYCHAIN.value -> Intent(this, ServerProxyChainActivity::class.java)
+            EConfigType.VMESS.value -> Intent(this, ServerVmessActivity::class.java)
+            EConfigType.VLESS.value -> Intent(this, ServerVlessActivity::class.java)
+            EConfigType.SHADOWSOCKS.value -> Intent(this, ServerShadowsocksActivity::class.java)
+            EConfigType.SOCKS.value -> Intent(this, ServerSocksActivity::class.java)
+            EConfigType.HTTP.value -> Intent(this, ServerHttpActivity::class.java)
+            EConfigType.TROJAN.value -> Intent(this, ServerTrojanActivity::class.java)
+            EConfigType.WIREGUARD.value -> Intent(this, ServerWireguardActivity::class.java)
+            EConfigType.HYSTERIA2.value -> Intent(this, ServerHysteria2Activity::class.java)
+            EConfigType.MASQUE.value -> Intent(this, ServerMasqueActivity::class.java)
+            EConfigType.AETHER.value -> Intent(this, ServerAetherActivity::class.java)
+            else -> Intent(this, ServerHttpActivity::class.java).apply {
+                putExtra("createConfigType", createConfigType)
+            }
+        }.apply {
+            putExtra("subscriptionId", mainViewModel.uiState.value.selectedGroupId)
+        }
+        profileEditorLauncher.launch(intent)
+    }
+
+    private fun importQRcode() {
+        launchQRCodeScanner { scanResult ->
+            if (scanResult != null) {
+                mainViewModel.onAction(MainAction.ImportBatchConfig(scanResult))
+            }
+        }
+    }
+
+    private fun importClipboard() {
+        try {
+            val text = Utils.getClipboard(this)
+            mainViewModel.onAction(MainAction.ImportBatchConfig(text))
+        } catch (e: Exception) {
+            LogUtil.e(AppConfig.TAG, "Failed to import config from clipboard", e)
+        }
+    }
+
+    private fun importConfigLocal() {
+        launchFileChooser { uri ->
+            if (uri == null) return@launchFileChooser
+            try {
+                contentResolver.openInputStream(uri)?.bufferedReader()?.use { reader ->
+                    mainViewModel.onAction(MainAction.ImportBatchConfig(reader.readText()))
+                }
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "Failed to read content from URI", e)
+            }
+        }
+    }
+
+    private fun editServer(guid: String, profile: ProfileItem) {
+        val activityClass = when (profile.configType) {
+            EConfigType.CUSTOM, EConfigType.CUSTOM_OUTBOUND -> ServerCustomConfigActivity::class.java
+            EConfigType.POLICYGROUP -> ServerGroupActivity::class.java
+            EConfigType.PROXYCHAIN -> ServerProxyChainActivity::class.java
+            EConfigType.VMESS -> ServerVmessActivity::class.java
+            EConfigType.VLESS -> ServerVlessActivity::class.java
+            EConfigType.SHADOWSOCKS -> ServerShadowsocksActivity::class.java
+            EConfigType.SOCKS -> ServerSocksActivity::class.java
+            EConfigType.HTTP -> ServerHttpActivity::class.java
+            EConfigType.TROJAN -> ServerTrojanActivity::class.java
+            EConfigType.WIREGUARD -> ServerWireguardActivity::class.java
+            EConfigType.HYSTERIA2 -> ServerHysteria2Activity::class.java
+            EConfigType.MASQUE -> ServerMasqueActivity::class.java
+            EConfigType.AETHER -> ServerAetherActivity::class.java
+            else -> ServerHttpActivity::class.java
+        }
+        val intent = Intent(this, activityClass).apply {
+            putExtra("guid", guid)
+            putExtra("isRunning", mainViewModel.uiState.value.isRunning)
+            putExtra("createConfigType", profile.configType.value)
+            putExtra("subscriptionId", mainViewModel.uiState.value.selectedGroupId)
+        }
+        profileEditorLauncher.launch(intent)
+    }
+
+    private fun setSelectServer(guid: String) {
+        val selected = mainViewModel.uiState.value.selectedGuid
+        if (guid != selected) {
+            mainViewModel.updateSelectedGuid(guid)
+            LauncherManager.restartService(this)
+        }
+    }
+
+}
+
+/** Keep the existing launcher, notification, and shortcut target stable. */
+class MainActivity : BaseMainActivity() {
+    override fun televisionDestination(): Intent? {
+        val isTelevision = resources.configuration.uiMode and Configuration.UI_MODE_TYPE_MASK == Configuration.UI_MODE_TYPE_TELEVISION
+        // PattNG: with the extras of the intent, so that an import's refresh (EXTRA_REFRESH_AFTER_IMPORT) reaches an open
+        // TV screen too, as it does the phone one.
+        return if (isTelevision) Intent(this, TvMainActivity::class.java).putExtras(intent) else null
+    }
+
+    @Composable
+    override fun MainContent(viewModel: MainViewModel, onAction: (MainAction) -> Unit, onNavigate: (MainDestination) -> Unit) {
+        MainScreen(viewModel, onAction, onNavigate)
+    }
+
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_BUTTON_B) {
+            moveTaskToBack(false)
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+}
