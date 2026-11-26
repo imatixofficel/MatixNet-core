@@ -32,6 +32,25 @@ jobs:
         submodules: 'recursive'
         fetch-depth: '0'
 
+    # The repository was uploaded as plain files, so the submodule folders arrive empty and the
+    # checkout above has nothing to fetch. Clone any that are still empty (with their own
+    # submodules: hev-socks5-tunnel needs yaml, lwip and hev-task-system).
+    - name: Fetch empty submodules
+      run: |
+        set -e
+        for entry in \
+          "AndroidLibXrayLite|https://github.com/patterniha/AndroidLibXrayLite" \
+          "hev-socks5-tunnel|https://github.com/heiher/hev-socks5-tunnel" \
+          "aether|https://github.com/patterniha/Aether.git"; do
+          path="${entry%%|*}"
+          url="${entry#*|}"
+          if [ -z "$(ls -A "$path" 2>/dev/null)" ]; then
+            echo "Submodule $path is empty, cloning $url"
+            rm -rf "$path"
+            git clone --recurse-submodules "$url" "$path"
+          fi
+        done
+
     - name: Setup Android SDK
       uses: android-actions/setup-android@v4
       with:
