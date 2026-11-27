@@ -204,6 +204,18 @@ jobs:
         fileName: "android_keystore.jks"
         encodedString: ${{ secrets.APP_KEYSTORE_BASE64 }}
 
+    # *.jar is in .gitignore, so a repository created from an upload can lack the Gradle wrapper jar
+    # ("Could not find or load main class org.gradle.wrapper.GradleWrapperMain"). The runner's own Gradle
+    # writes it back for the version pinned in gradle-wrapper.properties.
+    - name: Restore Gradle wrapper jar
+      run: |
+        cd ${{ github.workspace }}/V2rayNG
+        if [ ! -f gradle/wrapper/gradle-wrapper.jar ]; then
+          GRADLE_VER=$(sed -n 's#.*gradle-\(.*\)-bin.zip#\1#p' gradle/wrapper/gradle-wrapper.properties)
+          echo "gradle-wrapper.jar is missing, regenerating it for Gradle $GRADLE_VER"
+          gradle wrapper --gradle-version "$GRADLE_VER"
+        fi
+
     - name: Build APK
       run: |
         cd ${{ github.workspace }}/V2rayNG
