@@ -99,9 +99,9 @@ class WelcomeActivity : HelperBaseComponentActivity() {
                     launchQRCodeScanner { result -> if (!result.isNullOrBlank()) onResult(result) }
                 },
                 onAdd = ::addSubscription,
-                onBuy = { Utils.openUri(this, AppConfig.MATIX_BOT_URL) },
+                onBuy = { Utils.openUri(this@WelcomeActivity, AppConfig.MATIX_BOT_URL) },
                 onSkip = { openMain(imported = false) },
-                onToggleTheme = { MatixAppSettings.toggleTheme(this) },
+                onToggleTheme = { MatixAppSettings.toggleTheme(this@WelcomeActivity) },
                 onToggleLanguage = { MatixAppSettings.toggleLanguage() }
             )
             if (!introDone) {
