@@ -279,7 +279,8 @@ jobs:
   sign-and-release:
     needs: build
     runs-on: ubuntu-26.04
-    if: github.event_name == 'workflow_dispatch' && inputs.release_tag != ''
+    # Every manual run publishes its APKs as a release; the tag is release_tag when given, else build-<run number>.
+    if: github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Download APK artifacts
@@ -315,8 +316,8 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           file: release-files/*
-          tag: ${{ inputs.release_tag }}
-          release_name: PattNG v${{ inputs.release_tag }}
+          tag: ${{ inputs.release_tag != '' && inputs.release_tag || format('build-{0}', github.run_number) }}
+          release_name: MatixNet ${{ inputs.release_tag != '' && inputs.release_tag || format('build-{0}', github.run_number) }}
           body: "."
           target_commit: ${{ github.sha }}
           file_glob: true
