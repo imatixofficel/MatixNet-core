@@ -187,9 +187,6 @@ fun MatixIntro(onFinished: () -> Unit) {
     }
 }
 
-private fun Modifier.background(Color.Black): Modifier =
-    this.then(Modifier.background(Color.Black))
-
 /** Matix net: a country flag from assets/flags for the server named [remarks], or a blue globe when none matches. */
 @Composable
 fun FlagIcon(remarks: String, modifier: Modifier = Modifier, size: Dp = 34.dp) {
