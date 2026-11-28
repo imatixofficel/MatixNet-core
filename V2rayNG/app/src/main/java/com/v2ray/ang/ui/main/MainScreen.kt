@@ -1,47 +1,93 @@
 package com.v2ray.ang.ui.main
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.ScaffoldDefaults
-import androidx.compose.material3.rememberDrawerState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.v2ray.ang.AppConfig
+import com.v2ray.ang.BuildConfig
 import com.v2ray.ang.R
-import com.v2ray.ang.dto.entities.ProfileItem
-import com.v2ray.ang.extension.toastError
-import com.v2ray.ang.ui.compose.LocalDarkTheme
-import com.v2ray.ang.ui.compose.QRCodeDialog
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.launch
+import com.v2ray.ang.dto.GroupMapItem
+import com.v2ray.ang.extension.toTrafficString
+import com.v2ray.ang.handler.MatixHomeSettings
+import com.v2ray.ang.ui.compose.FlagIcon
+import com.v2ray.ang.ui.compose.MatixBlueBrush
+import com.v2ray.ang.ui.compose.MatixBuyButton
+import com.v2ray.ang.ui.compose.MatixLogo
+import com.v2ray.ang.ui.compose.glassCard
+import com.v2ray.ang.util.Utils
+import java.text.NumberFormat
+import java.util.Locale
 
+private val WarnAmber = Color(0xFFE59A00)
+private val WarnRed = Color(0xFFE5484D)
+private val OkGreen = Color(0xFF12A36B)
+
+/**
+ * MatixNET: the home screen. Only the connection button, the chosen server, the subscription card with its renew
+ * warning and a small settings page. Every operation goes through [onAction].
+ */
 @Composable
 fun MainScreen(
     mainViewModel: MainViewModel,
@@ -49,237 +95,558 @@ fun MainScreen(
     onNavigate: (MainDestination) -> Unit,
 ) {
     val uiState by mainViewModel.uiState.collectAsStateWithLifecycle()
-    val groups = uiState.groups
-    val isLoading by mainViewModel.isLoading.collectAsStateWithLifecycle()
-    val isRunning = uiState.isRunning
-    val displayText = mainViewModel.formatStatus(uiState.status)
-    val selectedGuid = uiState.selectedGuid
-    val doubleColumnDisplay = uiState.doubleColumnDisplay
-    val confirmRemove = uiState.confirmRemove
-    val shareQRCodeBitmap = uiState.shareQRCodeBitmap
+    val settings by MatixHomeSettings.state.collectAsStateWithLifecycle()
+    var showSettings by rememberSaveable { mutableStateOf(false) }
+    var showPicker by rememberSaveable { mutableStateOf(false) }
 
-    // PattNG: a move of a profile the storage refused is told once, each refusal by its number, so that one set again
-    // right after the last was told is told too; the groups are shown anew, as stored.
-    val context = LocalContext.current
-    val failureText = stringResource(R.string.toast_failure)
-    val moveRefusal = uiState.moveRefusal
-    LaunchedEffect(moveRefusal) {
-        if (moveRefusal != null) {
-            context.toastError(failureText)
-            onAction(MainAction.MoveRefusalShown(moveRefusal))
-        }
+    LaunchedEffect(Unit) { onAction(MainAction.LoadHomeSettings) }
+
+    val group = uiState.groups.firstOrNull { it.id == uiState.selectedGroupId } ?: uiState.groups.firstOrNull()
+    val rows = if (group != null) {
+        remember(group.id) { mainViewModel.serverGroupState(group.id) }.collectAsStateWithLifecycle().value.rows
+    } else {
+        emptyList()
     }
+    val selectedRow = rows.firstOrNull { it.guid == uiState.selectedGuid }
+    val usageInfo = group?.usageInfo
 
-    val isDarkTheme = LocalDarkTheme.current
-    val drawerState = rememberDrawerState(DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
-    var showSearch by rememberSaveable { mutableStateOf(false) }
-    val searchQuery = uiState.searchQuery
-    var showDelAllConfirm by remember { mutableStateOf(false) }
-    var showDelDuplicateConfirm by remember { mutableStateOf(false) }
-    var showDelInvalidConfirm by remember { mutableStateOf(false) }
-    var showRemoveConfirm by rememberSaveable(stateSaver = ServerDeleteTarget.Saver) {
-        mutableStateOf<ServerDeleteTarget?>(null)
-    }
-    var showDonate by rememberSaveable { mutableStateOf(false) }
-
-    var shareTarget by remember { mutableStateOf<Triple<String, ProfileItem, Boolean>?>(null) }
-    val removeServer: (String, String) -> Unit = { guid, profileName ->
-        if (confirmRemove) {
-            showRemoveConfirm = ServerDeleteTarget(guid, profileName)
-        } else {
-            onAction(MainAction.RemoveServer(guid))
-        }
-    }
-
-    val pagerState = rememberPagerState(
-        initialPage = 0,
-        pageCount = { groups.size.coerceAtLeast(1) }
-    )
-
-    LaunchedEffect(groups, uiState.selectedGroupId) {
-        if (groups.isEmpty()) return@LaunchedEffect
-        val selectedIndex = groups.indexOfFirst { it.id == uiState.selectedGroupId }
-            .takeIf { it >= 0 } ?: 0
-        if (!pagerState.isScrollInProgress && pagerState.settledPage != selectedIndex) {
-            pagerState.scrollToPage(selectedIndex)
-        }
-    }
-
-    val latestGroups by rememberUpdatedState(groups)
-    // Height of the floating connection bar, so the server lists can scroll clear of it.
-    var bottomBarHeightPx by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.settledPage }
-            .distinctUntilChanged()
-            .collect { page ->
-                val currentGroups = latestGroups
-                if (page in currentGroups.indices) {
-                    onAction(MainAction.SelectGroup(currentGroups[page].id))
-                }
-            }
-    }
-
-    MainDialogs(
-        showDelAllConfirm = showDelAllConfirm,
-        onDismissDelAll = { showDelAllConfirm = false },
-        onConfirmDelAll = { showDelAllConfirm = false; onAction(MainAction.RemoveAllServers) },
-        showDelDuplicateConfirm = showDelDuplicateConfirm,
-        onDismissDelDuplicate = { showDelDuplicateConfirm = false },
-        onConfirmDelDuplicate = { showDelDuplicateConfirm = false; onAction(MainAction.RemoveDuplicateServers) },
-        showDelInvalidConfirm = showDelInvalidConfirm,
-        onDismissDelInvalid = { showDelInvalidConfirm = false },
-        onConfirmDelInvalid = { showDelInvalidConfirm = false; onAction(MainAction.RemoveInvalidServers) },
-        showRemoveConfirm = showRemoveConfirm,
-        onDismissRemove = { showRemoveConfirm = null },
-        onConfirmRemove = { guid -> showRemoveConfirm = null; onAction(MainAction.RemoveServer(guid)) },
-        showDonate = showDonate,
-        onDismissDonate = { showDonate = false },
-        onCopyDonationAddress = { address -> onAction(MainAction.CopyDonationAddress(address)) },
-        onOpenAuthorTelegram = { onAction(MainAction.OpenAuthorTelegram) }
-    )
-
-    if (shareTarget != null) {
-        val (guid, profile, more) = shareTarget!!
-        ShareMethodDialog(
-            guid = guid,
-            profile = profile,
-            more = more,
-            onDismiss = { shareTarget = null },
+    if (showSettings) {
+        BackHandler { showSettings = false }
+        MatixSettingsPage(
+            settings = settings,
+            supportUrl = usageInfo?.supportUrl ?: AppConfig.MATIX_BOT_URL,
             onAction = onAction,
-            onRemove = removeServer,
+            onNavigate = onNavigate,
+            onBack = { showSettings = false }
         )
-    }
-    if (shareQRCodeBitmap != null) {
-        QRCodeDialog(bitmap = shareQRCodeBitmap, onDismiss = { onAction(MainAction.DismissQRCodeDialog) })
+        return
     }
 
-    ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
-            MainDrawerContent(
-                drawerState = drawerState,
-                onNavigate = { route ->
-                    scope.launch { drawerState.close() }
-                    onNavigate(route)
-                }
-            )
-        }
-    ) {
-        Scaffold(
-            containerColor = androidx.compose.ui.graphics.Color.Transparent,
-            contentWindowInsets = ScaffoldDefaults.contentWindowInsets,
-            topBar = {
-                MainTopBar(
-                    isLoading = isLoading,
-                    showSearch = showSearch,
-                    searchQuery = searchQuery,
-                    onSearchQueryChange = { onAction(MainAction.Search(it)) },
-                    onSearchClose = {
-                        onAction(MainAction.Search(""))
-                        showSearch = false
-                    },
-                    onSearchToggle = { show: Boolean -> showSearch = show },
-                    onMenuClick = { scope.launch { drawerState.open() } },
-                    onAction = onAction,
-                    onMoreMenuAction = { action ->
-                        when (action) {
-                            MainMoreMenuAction.RestartService -> onAction(MainAction.RestartService)
-                            MainMoreMenuAction.DeleteAll -> showDelAllConfirm = true
-                            MainMoreMenuAction.DeleteDuplicate -> showDelDuplicateConfirm = true
-                            MainMoreMenuAction.DeleteInvalid -> showDelInvalidConfirm = true
-                            MainMoreMenuAction.ExportAll -> onAction(MainAction.ExportAll)
-                            MainMoreMenuAction.LocateSelected -> onAction(MainAction.LocateSelectedServer)
-                            MainMoreMenuAction.SortByTestResults -> onAction(MainAction.SortByTestResults)
-                            MainMoreMenuAction.TestAll -> onAction(MainAction.TestAllServers)
-                            MainMoreMenuAction.TestAllRealPing -> onAction(MainAction.TestRealAllServers)
-                            MainMoreMenuAction.UpdateSubscriptions -> onAction(MainAction.UpdateSubscriptions)
+    if (showPicker) {
+        AlertDialog(
+            onDismissRequest = { showPicker = false },
+            title = { Text(stringResource(R.string.matix_choose_server)) },
+            text = {
+                LazyColumn {
+                    items(rows, key = { it.guid }) { row ->
+                        val selected = row.guid == uiState.selectedGuid
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
+                                .clickable {
+                                    showPicker = false
+                                    onAction(MainAction.SelectServer(row.guid))
+                                }
+                                .padding(horizontal = 10.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            FlagIcon(row.remarks, Modifier.padding(end = 10.dp), size = 30.dp)
+                            Text(row.remarks, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                )
+                }
             },
-            floatingActionButton = {},
-        ) { innerPadding ->
-            val layoutDirection = LocalLayoutDirection.current
-            val bottomBarHeight = with(LocalDensity.current) { bottomBarHeightPx.toDp() }
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showPicker = false }) { Text(stringResource(R.string.action_cancel)) } },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
 
-            Box(Modifier.fillMaxSize()) {
-            if (groups.isNotEmpty()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        // No bottom padding: the lists run behind the floating connection bar.
-                        .padding(
-                            start = innerPadding.calculateStartPadding(layoutDirection),
-                            top = innerPadding.calculateTopPadding(),
-                            end = innerPadding.calculateEndPadding(layoutDirection)
-                        )
-                ) {
-                    if (groups.size > 1) {
-                        GroupTabBar(
-                            groups = groups,
-                            selectedTabIndex = pagerState.currentPage.coerceIn(0, groups.lastIndex),
-                            mainViewModel = mainViewModel,
-                            onTabClick = { targetIndex ->
-                                scope.launch {
-                                    pagerState.navigateToPageOptimized(
-                                        targetPage = targetIndex,
-                                        animateAdjacentPage = true
-                                    )
-                                }
-                            }
-                        )
-                    }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        HomeHeader(onSettings = { showSettings = true })
 
-                    HorizontalPager(
-                        state = pagerState,
-                        modifier = Modifier.fillMaxSize(),
-                        userScrollEnabled = true,
-                        beyondViewportPageCount = 1,
-                        key = { page -> groups.getOrNull(page)?.id ?: "group-page-$page" }
-                    ) { page ->
-                        val group = groups.getOrNull(page) ?: return@HorizontalPager
+        ConnectCard(
+            isRunning = uiState.isRunning,
+            detail = mainViewModel.formatStatus(uiState.status),
+            serverName = selectedRow?.remarks,
+            onToggle = { onAction(MainAction.ToggleService) },
+            onPickServer = { if (rows.isNotEmpty()) showPicker = true }
+        )
 
-                        GroupPagerPage(
-                            groupId = group.id,
-                            mainViewModel = mainViewModel,
-                            selectedGuid = selectedGuid,
-                            locateTarget = uiState.locateTarget,
-                            doubleColumnDisplay = doubleColumnDisplay,
-                            searchQuery = searchQuery,
-                            onSelectServer = { guid -> onAction(MainAction.SelectServer(guid)) },
-                            onEditServer = { guid, profile -> onAction(MainAction.EditServer(guid, profile)) },
-                            onShareServer = { guid, profile ->
-                                shareTarget = Triple(guid, profile, false)
-                            },
-                            onMoreServer = { guid, profile ->
-                                shareTarget = Triple(guid, profile, true)
-                            },
-                            onRemoveServer = removeServer,
-                            usageInfo = group.usageInfo,
-                            groupTitle = group.remarks,
-                            onOpenLink = { url -> onAction(MainAction.OpenSubscriptionLink(url)) },
-                            contentPadding = PaddingValues(
-                                start = 0.dp,
-                                top = 0.dp,
-                                end = 0.dp,
-                                bottom = bottomBarHeight + 8.dp
-                            )
-                        )
-                    }
+        val status = remember(usageInfo) {
+            usageInfo?.let { buildMatixSubscriptionStatus(it, System.currentTimeMillis()) }
+        }
+        if (status != null && status.warning != MatixWarning.NONE) {
+            RenewWarning(status, onRenew = { onAction(MainAction.BuySubscription) })
+        }
+        if (group != null) {
+            SubscriptionCard(
+                title = usageInfo?.title ?: group.remarks,
+                status = status,
+                group = group,
+                onRefresh = { onAction(MainAction.UpdateGroupSubscription(group.id)) }
+            )
+        }
+    }
+}
+
+@Composable
+private fun HomeHeader(onSettings: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        MatixLogo(size = 44.dp)
+        Spacer(Modifier.width(12.dp))
+        Text(
+            text = stringResource(R.string.app_name),
+            modifier = Modifier.weight(1f),
+            fontSize = 24.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        IconButton(
+            onClick = onSettings,
+            modifier = Modifier
+                .size(46.dp)
+                .glassCard(shape = CircleShape)
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_settings_24dp),
+                contentDescription = stringResource(R.string.matix_open_settings),
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConnectCard(
+    isRunning: Boolean,
+    detail: String,
+    serverName: String?,
+    onToggle: () -> Unit,
+    onPickServer: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassCard()
+            .padding(horizontal = 18.dp, vertical = 22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        PowerButton(isRunning = isRunning, onClick = onToggle)
+        Spacer(Modifier.height(18.dp))
+        Text(
+            text = stringResource(if (isRunning) R.string.matix_connected else R.string.matix_not_connected),
+            fontSize = 22.sp,
+            fontWeight = FontWeight.ExtraBold,
+            color = if (isRunning) OkGreen else MaterialTheme.colorScheme.onSurface
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = if (isRunning) detail else stringResource(R.string.matix_tap_to_connect),
+            fontSize = 14.sp,
+            textAlign = TextAlign.Center,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(18.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(20.dp))
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+                .clickable(onClick = onPickServer)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            FlagIcon(serverName.orEmpty(), Modifier.padding(end = 12.dp), size = 38.dp)
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = serverName ?: stringResource(R.string.matix_no_server),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = stringResource(R.string.matix_choose_server),
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = stringResource(if (isRunning) R.string.matix_status_connected else R.string.matix_status_disconnected),
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isRunning) OkGreen else WarnRed
+            )
+        }
+    }
+}
+
+/** The round connect button: soft rings around it, which breathe while connected. */
+@Composable
+private fun PowerButton(isRunning: Boolean, onClick: () -> Unit) {
+    val transition = rememberInfiniteTransition(label = "power")
+    val breathe by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.12f,
+        animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Reverse),
+        label = "breathe"
+    )
+    val primary = MaterialTheme.colorScheme.primary
+    val label = stringResource(if (isRunning) R.string.acc_stop else R.string.acc_start)
+    Box(Modifier.size(210.dp), contentAlignment = Alignment.Center) {
+        Box(
+            Modifier
+                .size(210.dp)
+                .scale(if (isRunning) breathe else 1f)
+                .clip(CircleShape)
+                .background(primary.copy(alpha = if (isRunning) 0.10f else 0.06f))
+        )
+        Box(
+            Modifier
+                .size(172.dp)
+                .scale(if (isRunning) 1f + (breathe - 1f) * 0.6f else 1f)
+                .clip(CircleShape)
+                .background(primary.copy(alpha = if (isRunning) 0.16f else 0.09f))
+        )
+        Box(
+            modifier = Modifier
+                .size(136.dp)
+                .clip(CircleShape)
+                .background(
+                    if (isRunning) MatixBlueBrush
+                    else androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White, Color(0xFFE6EEFF)))
+                )
+                .clickable(role = Role.Button, onClickLabel = label, onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            val tint = if (isRunning) Color.White else primary
+            Canvas(Modifier.size(54.dp)) {
+                val stroke = Stroke(width = size.width * 0.11f, cap = StrokeCap.Round)
+                val inset = stroke.width / 2f
+                drawArc(
+                    color = tint,
+                    startAngle = -60f,
+                    sweepAngle = 300f,
+                    useCenter = false,
+                    topLeft = Offset(inset, inset + size.height * 0.06f),
+                    size = Size(size.width - stroke.width, size.height - stroke.width - size.height * 0.06f),
+                    style = stroke
+                )
+                drawLine(
+                    color = tint,
+                    start = Offset(size.width / 2f, inset),
+                    end = Offset(size.width / 2f, size.height * 0.48f),
+                    strokeWidth = stroke.width,
+                    cap = StrokeCap.Round
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RenewWarning(status: MatixSubscriptionStatus, onRenew: () -> Unit) {
+    val message = when (status.warning) {
+        MatixWarning.DAYS_LEFT -> stringResource(R.string.matix_warn_days, (status.daysLeft ?: 0L).toInt())
+        MatixWarning.LAST_DAY -> stringResource(R.string.matix_warn_last_day)
+        MatixWarning.TRAFFIC_LOW -> stringResource(R.string.matix_warn_traffic)
+        MatixWarning.TIME_EXPIRED -> stringResource(R.string.matix_warn_expired)
+        MatixWarning.TRAFFIC_OVER -> stringResource(R.string.matix_warn_traffic_over)
+        MatixWarning.NONE -> return
+    }
+    val tone = if (status.expired) WarnRed else WarnAmber
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(tone.copy(alpha = 0.14f))
+            .padding(start = 16.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(
+            text = message,
+            modifier = Modifier.weight(1f),
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = tone
+        )
+        MatixBuyButton(text = stringResource(R.string.matix_renew), onClick = onRenew, compact = true)
+    }
+}
+
+@Composable
+private fun SubscriptionCard(
+    title: String,
+    status: MatixSubscriptionStatus?,
+    group: GroupMapItem,
+    onRefresh: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .glassCard()
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    text = stringResource(R.string.matix_subscription),
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                if (title.isNotBlank()) {
+                    Text(
+                        text = title,
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
-            MainBottomBar(
-                displayText = displayText,
-                isRunning = isRunning,
-                isDarkTheme = isDarkTheme,
-                onAction = onAction,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .onSizeChanged { bottomBarHeightPx = it.height }
-            )
+            if (status != null) {
+                val tone = if (status.expired) WarnRed else OkGreen
+                Text(
+                    text = stringResource(if (status.expired) R.string.matix_sub_expired else R.string.matix_sub_active),
+                    color = tone,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(tone.copy(alpha = 0.12f))
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                )
+                Spacer(Modifier.width(8.dp))
             }
+            IconButton(onClick = onRefresh, modifier = Modifier.size(40.dp)) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_refresh_24dp),
+                    contentDescription = stringResource(R.string.matix_sub_update) + " " + group.remarks,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+        if (status == null) return@Column
+
+        Spacer(Modifier.height(12.dp))
+        val totalText = if (status.totalBytes > 0L) status.totalBytes.toTrafficString() else stringResource(R.string.matix_unlimited)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                text = stringResource(R.string.matix_traffic_used_of, status.usedBytes.toTrafficString(), totalText),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            status.leftBytes?.let {
+                Text(
+                    text = stringResource(R.string.matix_traffic_left, it.toTrafficString()),
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        status.fraction?.let { fraction ->
+            Spacer(Modifier.height(8.dp))
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(CircleShape),
+                color = when {
+                    fraction >= 1f -> WarnRed
+                    fraction >= MATIX_WARN_TRAFFIC_FRACTION -> WarnAmber
+                    else -> MaterialTheme.colorScheme.primary
+                },
+                trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            val timeLeftText = when {
+                status.daysLeft == null -> stringResource(R.string.matix_unlimited)
+                status.daysLeft < 1L -> stringResource(R.string.matix_less_than_a_day)
+                else -> stringResource(R.string.matix_days_left, status.daysLeft.toInt())
+            }
+            InfoTile(
+                label = stringResource(R.string.matix_time_left),
+                value = timeLeftText,
+                valueColor = if (status.expired || (status.daysLeft != null && status.daysLeft <= MATIX_WARN_DAYS)) WarnRed
+                else MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+            InfoTile(
+                label = stringResource(R.string.matix_expiry_date),
+                value = status.expireMillis?.let { formatExpiry(it) } ?: stringResource(R.string.matix_unlimited),
+                valueColor = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun InfoTile(label: String, value: String, valueColor: Color, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
+            .padding(14.dp)
+    ) {
+        Text(label, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(6.dp))
+        Text(value, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold, color = valueColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** The expiry date: Persian calendar with Persian digits in Persian, else a plain yyyy-MM-dd. */
+@Composable
+private fun formatExpiry(millis: Long): String {
+    val language = LocalConfiguration.current.locales[0]?.language
+    val months = stringArrayResource(R.array.matix_jalali_months)
+    return if (language == "fa") {
+        val (y, m, d) = jalaliDate(millis)
+        val nf = NumberFormat.getInstance(Locale.forLanguageTag("fa")).apply { isGroupingUsed = false }
+        "${nf.format(d)} ${months[(m - 1).coerceIn(0, 11)]} ${nf.format(y)}"
+    } else {
+        Utils.formatTimestamp(millis, "yyyy-MM-dd")
+    }
+}
+
+@Composable
+private fun MatixSettingsPage(
+    settings: com.v2ray.ang.handler.MatixHomeSettingsState,
+    supportUrl: String,
+    onAction: (MainAction) -> Unit,
+    onNavigate: (MainDestination) -> Unit,
+    onBack: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack) {
+                Icon(painterResource(R.drawable.ic_arrow_back_24dp), contentDescription = stringResource(R.string.matix_back))
+            }
+            Text(
+                text = stringResource(R.string.matix_settings),
+                fontSize = 22.sp,
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier.padding(start = 4.dp)
+            )
+        }
+
+        SectionTitle(stringResource(R.string.matix_section_connection))
+        Column(Modifier.fillMaxWidth().glassCard().padding(vertical = 6.dp)) {
+            SwitchRow(R.drawable.ic_routing_24dp, R.string.matix_bypass_iran, R.string.matix_bypass_iran_desc, settings.bypassIran) {
+                onAction(MainAction.SetBypassIran(it))
+            }
+            ActionRow(R.drawable.ic_per_apps_24dp, stringResource(R.string.matix_per_app), stringResource(R.string.matix_per_app_desc)) {
+                onNavigate(MainDestination.PerAppProxy)
+            }
+            SwitchRow(R.drawable.ic_refresh_24dp, R.string.matix_auto_fastest, R.string.matix_auto_fastest_desc, settings.autoFastest) {
+                onAction(MainAction.SetAutoFastest(it))
+            }
+            SwitchRow(R.drawable.ic_play_24dp, R.string.matix_auto_start, R.string.matix_auto_start_desc, settings.autoStart) {
+                onAction(MainAction.SetAutoStart(it))
+            }
+            ActionRow(R.drawable.ic_settings_24dp, stringResource(R.string.matix_always_on), stringResource(R.string.matix_always_on_desc)) {
+                onAction(MainAction.OpenAlwaysOnVpnSettings)
+            }
+        }
+
+        SectionTitle(stringResource(R.string.matix_section_support))
+        Column(Modifier.fillMaxWidth().glassCard().padding(vertical = 6.dp)) {
+            ActionRow(
+                R.drawable.ic_telegram_24dp,
+                stringResource(R.string.matix_buy_renew),
+                stringResource(R.string.matix_buy_renew_desc, AppConfig.MATIX_BOT_ID)
+            ) { onAction(MainAction.BuySubscription) }
+            ActionRow(R.drawable.ic_feedback_24dp, stringResource(R.string.matix_support), supportUrl.removePrefix("https://")) {
+                onAction(MainAction.OpenSubscriptionLink(supportUrl))
+            }
+        }
+        Text(
+            text = stringResource(R.string.matix_version, BuildConfig.VERSION_NAME),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            textAlign = TextAlign.Center,
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
+private fun SectionTitle(text: String) {
+    Text(
+        text = text,
+        modifier = Modifier.padding(horizontal = 6.dp),
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+}
+
+@Composable
+private fun RowIcon(iconRes: Int) {
+    Box(
+        Modifier
+            .size(42.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(painterResource(iconRes), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+    }
+}
+
+@Composable
+private fun SwitchRow(iconRes: Int, titleRes: Int, descRes: Int, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val title = stringResource(titleRes)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onChange)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RowIcon(iconRes)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(descRes), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Switch(checked = checked, onCheckedChange = null)
+    }
+}
+
+@Composable
+private fun ActionRow(iconRes: Int, title: String, description: String, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        RowIcon(iconRes)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(
+                description,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
