@@ -31,7 +31,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,7 +41,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
@@ -52,7 +50,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.lifecycleScope
 import com.v2ray.ang.AppConfig
 import com.v2ray.ang.R
@@ -61,12 +58,12 @@ import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MatixAppSettings
 import com.v2ray.ang.ui.base.HelperBaseComponentActivity
 import com.v2ray.ang.ui.compose.MatixBlueBrush
+import com.v2ray.ang.ui.compose.MatixBuyButton
 import com.v2ray.ang.ui.compose.MatixIntro
 import com.v2ray.ang.ui.compose.MatixIntroState
 import com.v2ray.ang.ui.compose.MatixLogo
 import com.v2ray.ang.ui.compose.glassCard
 import com.v2ray.ang.ui.compose.matixBackdrop
-import com.v2ray.ang.ui.compose.LocalDarkTheme
 import com.v2ray.ang.ui.main.MainActivity
 import com.v2ray.ang.util.LogUtil
 import com.v2ray.ang.util.Utils
@@ -75,8 +72,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Matix net: the first screen. The person pastes or scans a subscription link, or buys one from the Telegram bot.
- * It is shown while no subscription was added and the screen was not skipped; adding one opens the main screen.
+ * MatixNET: the first screen. The person pastes or scans a subscription link, or buys one from the Telegram bot.
+ * It is shown whenever there is no subscription or server; adding one opens the main screen, which cannot be
+ * entered without one.
  */
 class WelcomeActivity : HelperBaseComponentActivity() {
 
@@ -99,10 +97,7 @@ class WelcomeActivity : HelperBaseComponentActivity() {
                     launchQRCodeScanner { result -> if (!result.isNullOrBlank()) onResult(result) }
                 },
                 onAdd = ::addSubscription,
-                onBuy = { Utils.openUri(this@WelcomeActivity, AppConfig.MATIX_BOT_URL) },
-                onSkip = { openMain(imported = false) },
-                onToggleTheme = { MatixAppSettings.toggleTheme(this@WelcomeActivity) },
-                onToggleLanguage = { MatixAppSettings.toggleLanguage() }
+                onBuy = { Utils.openUri(this@WelcomeActivity, AppConfig.MATIX_BOT_URL) }
             )
             if (!introDone) {
                 MatixIntro(onFinished = { MatixIntroState.shown = true; introDone = true })
@@ -149,13 +144,9 @@ private fun WelcomeScreen(
     onPaste: () -> String,
     onScan: ((String) -> Unit) -> Unit,
     onAdd: (String) -> Unit,
-    onBuy: () -> Unit,
-    onSkip: () -> Unit,
-    onToggleTheme: () -> Unit,
-    onToggleLanguage: () -> Unit
+    onBuy: () -> Unit
 ) {
     var link by rememberSaveable { mutableStateOf("") }
-    val dark = LocalDarkTheme.current
     val onSurface = MaterialTheme.colorScheme.onSurface
 
     Column(
@@ -167,33 +158,8 @@ private fun WelcomeScreen(
             .padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Top row: the two switches on the left, "buy subscription" on the physical right, in every language.
-        CompositionLocalProvider(LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Ltr) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onToggleTheme) {
-                        Icon(
-                            painter = painterResource(if (dark) R.drawable.ic_sun_24dp else R.drawable.ic_moon_24dp),
-                            contentDescription = stringResource(R.string.matix_toggle_theme)
-                        )
-                    }
-                    IconButton(onClick = onToggleLanguage) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_translate_24dp),
-                            contentDescription = stringResource(R.string.matix_toggle_language)
-                        )
-                    }
-                }
-                BuyChip(onClick = onBuy)
-            }
-        }
-
-        Spacer(Modifier.height(18.dp))
-        MatixLogo(size = 104.dp, interactive = true)
+        Spacer(Modifier.height(36.dp))
+        MatixLogo(size = 112.dp, interactive = true)
         Spacer(Modifier.height(20.dp))
         Text(
             text = stringResource(R.string.matix_bismillah),
@@ -315,12 +281,10 @@ private fun WelcomeScreen(
                 lineHeight = 22.sp
             )
             Spacer(Modifier.height(14.dp))
-            BlueButton(
+            MatixBuyButton(
                 text = stringResource(R.string.matix_buy_telegram),
-                enabled = true,
-                loading = false,
-                iconRes = R.drawable.ic_telegram_24dp,
-                onClick = onBuy
+                onClick = onBuy,
+                modifier = Modifier.fillMaxWidth()
             )
             Spacer(Modifier.height(10.dp))
             Text(
@@ -338,15 +302,8 @@ private fun WelcomeScreen(
         }
 
         Spacer(Modifier.height(10.dp))
-        TextButton(onClick = onSkip) {
-            Text(
-                text = stringResource(R.string.matix_skip),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontSize = 13.sp
-            )
-        }
         Text(
-            text = "Matix net",
+            text = "MatixNET",
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             fontSize = 12.sp,
             letterSpacing = 2.sp,
