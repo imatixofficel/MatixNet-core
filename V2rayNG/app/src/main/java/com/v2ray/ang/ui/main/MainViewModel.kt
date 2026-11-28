@@ -391,6 +391,11 @@ class MainViewModel(
             MainAction.BuySubscription,
             MainAction.ToggleTheme,
             MainAction.ToggleLanguage,
+            MainAction.LoadHomeSettings,
+            MainAction.OpenAlwaysOnVpnSettings,
+            is MainAction.SetBypassIran,
+            is MainAction.SetAutoFastest,
+            is MainAction.SetAutoStart,
             MainAction.OpenAuthorTelegram -> {
                 // Handled by Activity via its onAction lambda
             }
