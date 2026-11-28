@@ -34,6 +34,7 @@ import com.v2ray.ang.extension.toastError
 import com.v2ray.ang.extension.toastSuccess
 import com.v2ray.ang.handler.AngConfigManager
 import com.v2ray.ang.handler.MatixAppSettings
+import com.v2ray.ang.handler.MatixHomeSettings
 import com.v2ray.ang.handler.MmkvManager
 import com.v2ray.ang.handler.SettingsChangeManager
 import com.v2ray.ang.handler.SettingsManager
@@ -119,8 +120,8 @@ abstract class BaseMainActivity : HelperBaseComponentActivity() {
             finish()
             return
         }
-        // Matix net: a first launch with no subscription and no server opens the welcome screen.
-        if (!MatixAppSettings.welcomeDone() && !hasAnyServer() &&
+        // MatixNET: without a subscription or a server the main screen cannot be entered, only the welcome screen.
+        if (!hasAnyServer() &&
             !intent.getBooleanExtra(AppConfig.EXTRA_REFRESH_AFTER_IMPORT, false)
         ) {
             forwardingToTv = true
@@ -198,6 +199,19 @@ abstract class BaseMainActivity : HelperBaseComponentActivity() {
             MainAction.BuySubscription -> Utils.openUri(this, AppConfig.MATIX_BOT_URL)
             MainAction.ToggleTheme -> MatixAppSettings.toggleTheme(this)
             MainAction.ToggleLanguage -> MatixAppSettings.toggleLanguage()
+            MainAction.LoadHomeSettings -> lifecycleScope.launch(Dispatchers.IO) { MatixHomeSettings.refresh() }
+            is MainAction.SetBypassIran -> lifecycleScope.launch(Dispatchers.IO) {
+                if (MatixHomeSettings.setBypassIran(action.enabled) && mainViewModel.uiState.value.isRunning) {
+                    LauncherManager.restartService(this@BaseMainActivity)
+                }
+            }
+            is MainAction.SetAutoFastest -> lifecycleScope.launch(Dispatchers.IO) { MatixHomeSettings.setAutoFastest(action.enabled) }
+            is MainAction.SetAutoStart -> lifecycleScope.launch(Dispatchers.IO) { MatixHomeSettings.setAutoStart(action.enabled) }
+            MainAction.OpenAlwaysOnVpnSettings -> try {
+                startActivity(Intent(android.provider.Settings.ACTION_VPN_SETTINGS))
+            } catch (e: Exception) {
+                LogUtil.e(AppConfig.TAG, "MatixNET: the VPN settings could not be opened", e)
+            }
             else -> mainViewModel.onAction(action)
         }
     }
