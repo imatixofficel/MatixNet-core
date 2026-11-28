@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MatixNET home -->
+    <string name="matix_not_connected">متصل نیستید</string>
+    <string name="matix_connected">متصل هستید</string>
+    <string name="matix_tap_to_connect">برای اتصال، دکمه را لمس کنید</string>
+    <string name="matix_status_disconnected">قطع</string>
+    <string name="matix_status_connected">وصل</string>
+    <string name="matix_choose_server">انتخاب سرور</string>
+    <string name="matix_no_server">سروری انتخاب نشده</string>
+    <string name="matix_subscription">اشتراک</string>
+    <string name="matix_sub_active">فعال</string>
+    <string name="matix_sub_expired">منقضی</string>
+    <string name="matix_sub_update">به‌روزرسانی</string>
+    <string name="matix_traffic_used_of">%1$s از %2$s</string>
+    <string name="matix_traffic_left">باقی‌مانده: %1$s</string>
+    <string name="matix_time_left">زمان باقی‌مانده</string>
+    <string name="matix_expiry_date">تاریخ انقضا</string>
+    <string name="matix_unlimited">نامحدود</string>
+    <string name="matix_less_than_a_day">کمتر از یک روز</string>
+    <string name="matix_days_left">%1$d روز</string>
+    <string name="matix_warn_days">%1$d روز به پایان اشتراک مانده است. تمدید کنید.</string>
+    <string name="matix_warn_last_day">کمتر از یک روز به پایان اشتراک مانده است. تمدید کنید.</string>
+    <string name="matix_warn_traffic">حجم اشتراک رو به اتمام است. تمدید کنید.</string>
+    <string name="matix_warn_expired">اشتراک شما تمام شده است. تمدید کنید.</string>
+    <string name="matix_warn_traffic_over">حجم اشتراک تمام شده است. تمدید کنید.</string>
+    <string name="matix_renew">تمدید</string>
+    <string name="matix_settings">تنظیمات</string>
+    <string name="matix_section_connection">اتصال</string>
+    <string name="matix_section_support">پشتیبانی</string>
+    <string name="matix_bypass_iran">عبور سایت‌های ایرانی</string>
+    <string name="matix_bypass_iran_desc">سایت‌ها و اپ‌های ایرانی مستقیم و بدون VPN باز می‌شوند</string>
+    <string name="matix_per_app">پروکسی برنامه‌ها</string>
+    <string name="matix_per_app_desc">انتخاب برنامه‌هایی که از VPN استفاده می‌کنند</string>
+    <string name="matix_auto_fastest">انتخاب خودکار سریع‌ترین سرور</string>
+    <string name="matix_auto_fastest_desc">بعد از هر تست پینگ، سریع‌ترین سرور انتخاب می‌شود</string>
+    <string name="matix_auto_start">اتصال خودکار با روشن شدن گوشی</string>
+    <string name="matix_auto_start_desc">بعد از ری‌استارت، VPN خودش وصل می‌شود</string>
+    <string name="matix_always_on">VPN همیشه روشن</string>
+    <string name="matix_always_on_desc">در تنظیمات گوشی، MatixNET را «همیشه روشن» کنید</string>
+    <string name="matix_buy_renew">خرید و تمدید اشتراک</string>
+    <string name="matix_buy_renew_desc">در تلگرام: %1$s</string>
+    <string name="matix_support">پشتیبانی</string>
+    <string name="matix_version">MatixNET نسخه %1$s</string>
+    <string name="matix_back">بازگشت</string>
+    <string name="matix_open_settings">باز کردن تنظیمات</string>
+</resources>

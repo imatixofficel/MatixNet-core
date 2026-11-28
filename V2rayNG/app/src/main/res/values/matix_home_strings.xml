@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MatixNET home -->
+    <string name="matix_not_connected">You are not connected</string>
+    <string name="matix_connected">You are connected</string>
+    <string name="matix_tap_to_connect">Tap the button to connect</string>
+    <string name="matix_status_disconnected">Off</string>
+    <string name="matix_status_connected">On</string>
+    <string name="matix_choose_server">Choose a server</string>
+    <string name="matix_no_server">No server selected</string>
+    <string name="matix_subscription">Subscription</string>
+    <string name="matix_sub_active">Active</string>
+    <string name="matix_sub_expired">Expired</string>
+    <string name="matix_sub_update">Update</string>
+    <string name="matix_traffic_used_of">%1$s of %2$s</string>
+    <string name="matix_traffic_left">Left: %1$s</string>
+    <string name="matix_time_left">Time left</string>
+    <string name="matix_expiry_date">Expiry date</string>
+    <string name="matix_unlimited">Unlimited</string>
+    <string name="matix_less_than_a_day">Less than a day</string>
+    <string name="matix_days_left">%1$d days</string>
+    <string name="matix_warn_days">Your subscription ends in %1$d days. Renew it.</string>
+    <string name="matix_warn_last_day">Your subscription ends in less than a day. Renew it.</string>
+    <string name="matix_warn_traffic">Your data is almost used up. Renew it.</string>
+    <string name="matix_warn_expired">Your subscription has expired. Renew it.</string>
+    <string name="matix_warn_traffic_over">Your data is finished. Renew it.</string>
+    <string name="matix_renew">Renew</string>
+    <string name="matix_settings">Settings</string>
+    <string name="matix_section_connection">Connection</string>
+    <string name="matix_section_support">Support</string>
+    <string name="matix_bypass_iran">Bypass Iranian sites</string>
+    <string name="matix_bypass_iran_desc">Iranian sites and apps open directly, without VPN</string>
+    <string name="matix_per_app">App proxy</string>
+    <string name="matix_per_app_desc">Choose which apps use the VPN</string>
+    <string name="matix_auto_fastest">Pick the fastest server automatically</string>
+    <string name="matix_auto_fastest_desc">After each ping test the fastest server is selected</string>
+    <string name="matix_auto_start">Connect automatically at boot</string>
+    <string name="matix_auto_start_desc">After a restart the VPN connects by itself</string>
+    <string name="matix_always_on">Always-on VPN</string>
+    <string name="matix_always_on_desc">Turn on \"Always-on\" for MatixNET in the phone settings</string>
+    <string name="matix_buy_renew">Buy or renew subscription</string>
+    <string name="matix_buy_renew_desc">In Telegram: %1$s</string>
+    <string name="matix_support">Support</string>
+    <string name="matix_version">MatixNET version %1$s</string>
+    <string name="matix_back">Back</string>
+    <string name="matix_open_settings">Open settings</string>
+    <string-array name="matix_jalali_months" translatable="false">
+        <item>فروردین</item>
+        <item>اردیبهشت</item>
+        <item>خرداد</item>
+        <item>تیر</item>
+        <item>مرداد</item>
+        <item>شهریور</item>
+        <item>مهر</item>
+        <item>آبان</item>
+        <item>آذر</item>
+        <item>دی</item>
+        <item>بهمن</item>
+        <item>اسفند</item>
+    </string-array>
+</resources>

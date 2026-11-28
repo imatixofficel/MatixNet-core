@@ -94,6 +94,13 @@ sealed interface MainAction {
     data object ToggleTheme : MainAction
     data object ToggleLanguage : MainAction
 
+    /** MatixNET: the switches of the home screen's settings page. */
+    data class SetBypassIran(val enabled: Boolean) : MainAction
+    data class SetAutoFastest(val enabled: Boolean) : MainAction
+    data class SetAutoStart(val enabled: Boolean) : MainAction
+    data object OpenAlwaysOnVpnSettings : MainAction
+    data object LoadHomeSettings : MainAction
+
     data class ImportBatchConfig(val configText: String) : MainAction
 
     data class LocateHandled(val target: LocateTarget) : MainAction
