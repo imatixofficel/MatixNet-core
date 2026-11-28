@@ -40,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -148,6 +149,7 @@ private fun WelcomeScreen(
 ) {
     var link by rememberSaveable { mutableStateOf("") }
     val onSurface = MaterialTheme.colorScheme.onSurface
+    val primary = MaterialTheme.colorScheme.primary
 
     Column(
         modifier = Modifier
@@ -158,16 +160,27 @@ private fun WelcomeScreen(
             .padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(36.dp))
-        MatixLogo(size = 112.dp, interactive = true)
-        Spacer(Modifier.height(20.dp))
+        Spacer(Modifier.height(28.dp))
+        // «به نام پروردگار» comes first, at the very top of the screen, above the icon.
         Text(
             text = stringResource(R.string.matix_bismillah),
-            color = MaterialTheme.colorScheme.primary,
-            fontSize = 15.sp,
-            fontWeight = FontWeight.Medium
+            color = primary,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
         )
-        Spacer(Modifier.height(6.dp))
+        Spacer(Modifier.height(24.dp))
+        MatixLogo(
+            size = 108.dp,
+            interactive = true,
+            modifier = Modifier.shadow(
+                18.dp,
+                RoundedCornerShape(24.dp),
+                ambientColor = primary,
+                spotColor = primary
+            )
+        )
+        Spacer(Modifier.height(22.dp))
         Text(
             text = stringResource(R.string.matix_welcome),
             color = onSurface,
@@ -180,6 +193,7 @@ private fun WelcomeScreen(
             text = stringResource(R.string.matix_welcome_sub),
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontSize = 15.sp,
+            lineHeight = 24.sp,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(horizontal = 12.dp)
         )
@@ -203,7 +217,7 @@ private fun WelcomeScreen(
                 onValueChange = { link = it },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(16.dp),
                 textStyle = TextStyle(textDirection = TextDirection.Ltr, fontSize = 14.sp),
                 placeholder = {
                     Text(
@@ -218,7 +232,7 @@ private fun WelcomeScreen(
                         Icon(
                             painter = painterResource(R.drawable.ic_paste_24dp),
                             contentDescription = stringResource(R.string.matix_paste),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = primary
                         )
                     }
                 },
@@ -227,15 +241,15 @@ private fun WelcomeScreen(
                         Icon(
                             painter = painterResource(R.drawable.ic_qu_scan_24dp),
                             contentDescription = stringResource(R.string.matix_scan),
-                            tint = MaterialTheme.colorScheme.primary
+                            tint = primary
                         )
                     }
                 },
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
-                    focusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.07f),
-                    unfocusedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.04f)
+                    focusedBorderColor = primary,
+                    unfocusedBorderColor = primary.copy(alpha = 0.30f),
+                    focusedContainerColor = primary.copy(alpha = 0.06f),
+                    unfocusedContainerColor = primary.copy(alpha = 0.04f)
                 )
             )
             Spacer(Modifier.height(14.dp))
@@ -289,7 +303,7 @@ private fun WelcomeScreen(
             Spacer(Modifier.height(10.dp))
             Text(
                 text = AppConfig.MATIX_BOT_ID,
-                color = MaterialTheme.colorScheme.primary,
+                color = primary,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier
@@ -301,13 +315,13 @@ private fun WelcomeScreen(
             )
         }
 
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(16.dp))
         Text(
-            text = "MatixNET",
+            text = "MatixNET VPN",
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
             fontSize = 12.sp,
             letterSpacing = 2.sp,
-            modifier = Modifier.padding(bottom = 12.dp)
+            modifier = Modifier.padding(bottom = 16.dp)
         )
     }
 }
@@ -348,11 +362,12 @@ private fun BlueButton(
     onClick: () -> Unit,
     iconRes: Int? = null
 ) {
+    val shape = RoundedCornerShape(16.dp)
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(54.dp)
-            .clip(CircleShape)
+            .clip(shape)
             .background(MatixBlueBrush, alpha = if (enabled) 1f else 0.38f)
             .clickable(enabled = enabled, onClick = onClick),
         contentAlignment = Alignment.Center
