@@ -1,6 +1,24 @@
 package com.v2ray.ang.ui.compose
 
 import android.graphics.BitmapFactory
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.Role
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -38,6 +56,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import com.v2ray.ang.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -86,15 +106,7 @@ fun MatixLogo(
     }
 
     Box(modifier = modifier.size(size).then(tapModifier), contentAlignment = Alignment.Center) {
-        Canvas(
-            Modifier
-                .size(size)
-                .graphicsLayer {
-                    rotationY = rotation.value
-                    scaleX = pulse.value
-                    scaleY = pulse.value
-                }
-        ) {
+        Canvas(Modifier.size(size)) {
             val w = this.size.width
             // Soft glow ring that flares on a tap.
             if (glow.value > 0f) {
@@ -104,36 +116,24 @@ fun MatixLogo(
                     style = Stroke(width = w * 0.05f)
                 )
             }
-            drawRoundRect(
-                brush = Brush.linearGradient(
-                    listOf(Color(0xFF55A2FF), Color(0xFF1456D9)),
-                    start = Offset(0f, 0f),
-                    end = Offset(w, w)
-                ),
-                cornerRadius = CornerRadius(w * 0.30f, w * 0.30f)
+        }
+        // MatixNET: the brand blue square with the logo, a vector traced from the brand image.
+        Box(
+            modifier = Modifier
+                .size(size)
+                .graphicsLayer {
+                    rotationY = rotation.value
+                    scaleX = pulse.value
+                    scaleY = pulse.value
+                }
+                .clip(RoundedCornerShape(size * 0.22f))
+                .background(Color(0xFF0067C6))
+        ) {
+            Image(
+                painter = painterResource(R.drawable.ic_matixnet_fg),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize().graphicsLayer { scaleX = 1.3333f; scaleY = 1.3333f }
             )
-            // Glassy highlight on the upper half.
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    listOf(Color.White.copy(alpha = 0.28f), Color.Transparent),
-                    endY = w * 0.55f
-                ),
-                cornerRadius = CornerRadius(w * 0.30f, w * 0.30f)
-            )
-            val stroke = Stroke(width = w * 0.085f, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            val m = Path().apply {
-                moveTo(w * 0.22f, w * 0.64f)
-                lineTo(w * 0.22f, w * 0.30f)
-                lineTo(w * 0.50f, w * 0.56f)
-                lineTo(w * 0.78f, w * 0.30f)
-                lineTo(w * 0.78f, w * 0.64f)
-            }
-            drawPath(m, Color.White, style = stroke)
-            val smile = Path().apply {
-                moveTo(w * 0.30f, w * 0.75f)
-                quadraticTo(w * 0.50f, w * 0.90f, w * 0.70f, w * 0.75f)
-            }
-            drawPath(smile, Color.White, style = Stroke(width = w * 0.06f, cap = StrokeCap.Round))
         }
     }
 }
@@ -177,7 +177,7 @@ fun MatixIntro(onFinished: () -> Unit) {
             MatixLogo(size = 112.dp, modifier = Modifier.graphicsLayer { scaleX = scale.value; scaleY = scale.value })
             Spacer(Modifier.height(18.dp))
             Text(
-                text = "Matix net",
+                text = "MatixNET",
                 color = Color.White,
                 fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
@@ -218,5 +218,67 @@ fun FlagIcon(remarks: String, modifier: Modifier = Modifier, size: Dp = 34.dp) {
             drawOval(Color.White.copy(alpha = 0.85f), topLeft = Offset(w * 0.36f, w * 0.20f), size = androidx.compose.ui.geometry.Size(w * 0.28f, w * 0.60f), style = line)
             drawLine(Color.White.copy(alpha = 0.85f), Offset(w * 0.20f, w * 0.5f), Offset(w * 0.80f, w * 0.5f), strokeWidth = w * 0.05f)
         }
+    }
+}
+
+/**
+ * MatixNET: the "buy / renew subscription" button. A sky-blue gradient pill with a soft glow and a light band that
+ * sweeps across it, so it stands apart from every other button of the app.
+ */
+@Composable
+fun MatixBuyButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    compact: Boolean = false
+) {
+    val transition = rememberInfiniteTransition(label = "buy-shine")
+    val sweep by transition.animateFloat(
+        initialValue = -0.4f,
+        targetValue = 1.4f,
+        animationSpec = infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Restart),
+        label = "sweep"
+    )
+    val shape = RoundedCornerShape(if (compact) 18.dp else 28.dp)
+    val glow = Color(0xFF2F9BFF)
+    Row(
+        modifier = modifier
+            .shadow(if (compact) 6.dp else 12.dp, shape, ambientColor = glow, spotColor = glow)
+            .clip(shape)
+            .background(Brush.horizontalGradient(listOf(Color(0xFF4FC3FF), Color(0xFF1B8BFF), Color(0xFF1456D9))))
+            .border(1.dp, Color.White.copy(alpha = 0.4f), shape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .drawWithContent {
+                drawContent()
+                val band = size.width * 0.25f
+                val start = sweep * size.width
+                drawRect(
+                    brush = Brush.horizontalGradient(
+                        listOf(Color.Transparent, Color.White.copy(alpha = 0.38f), Color.Transparent),
+                        startX = start,
+                        endX = start + band
+                    ),
+                    topLeft = Offset(start, 0f),
+                    size = Size(band, size.height)
+                )
+            }
+            .padding(horizontal = if (compact) 16.dp else 20.dp, vertical = if (compact) 9.dp else 15.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            painter = painterResource(R.drawable.ic_telegram_24dp),
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(if (compact) 16.dp else 22.dp)
+        )
+        Spacer(Modifier.width(if (compact) 6.dp else 10.dp))
+        Text(
+            text = text,
+            color = Color.White,
+            fontSize = if (compact) 13.sp else 16.sp,
+            fontWeight = FontWeight.ExtraBold,
+            maxLines = 1
+        )
     }
 }
