@@ -114,7 +114,7 @@ val dividerColorDark = Color(0xFF424242) // Dark Gray
 
 object ThemeManager {
     private val _themeMode = MutableStateFlow(
-        MmkvManager.decodeSettingsString(AppConfig.PREF_UI_MODE_NIGHT, "2") ?: "2"
+        MmkvManager.decodeSettingsString(AppConfig.PREF_UI_MODE_NIGHT, "1") ?: "1"
     )
     val themeMode: StateFlow<String> = _themeMode.asStateFlow()
 
@@ -135,7 +135,7 @@ object ThemeManager {
 
     fun refresh() {
         _themeMode.value =
-            MmkvManager.decodeSettingsString(AppConfig.PREF_UI_MODE_NIGHT, "2") ?: "2"
+            MmkvManager.decodeSettingsString(AppConfig.PREF_UI_MODE_NIGHT, "1") ?: "1"
         _dynamicColorEnabled.value =
             MmkvManager.decodeSettingsBool(AppConfig.PREF_DYNAMIC_COLOR, false)
     }
