@@ -169,6 +169,8 @@ class CoreTestService : Service() {
                     if (MmkvManager.decodeSettingsBool(AppConfig.PREF_AUTO_SORT_AFTER_TEST, false)) {
                         AngConfigManager.sortByTestResultsForSub(message.subscriptionId)
                     }
+                    // MatixNET: with "pick the fastest" on, the quickest working server becomes the selected one.
+                    com.v2ray.ang.handler.MatixHomeSettings.selectFastest(message.subscriptionId)
                 }
 
                 MessageHelper.sendMsg2UI(this, AppConfig.MSG_MEASURE_CONFIG_FINISH, event.status, requestId)
