@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- MatixNET: the app name; the -v21 qualifier makes it win over the older app_name of values*/strings.xml. -->
+    <string name="app_name" translatable="false">MatixNET</string>
+
+    <!-- MatixNET: the texts that name the app. -->
+    <string name="matix_welcome">به MatixNET خوش آمدید</string>
+    <string name="matix_no_sub_body">برای خرید اشتراک MatixNET به ربات %1$s در تلگرام پیام دهید. بعد از خرید، لینک اشتراک را اینجا وارد کنید.</string>
+    <string name="matix_about_body">MatixNET با کمک هوش مصنوعی و بر پایه‌ی پروژه‌های متن‌باز ساخته شده است. ظاهر برنامه از پایه دوباره طراحی شد تا سبک، روان و ساده باشد، و هسته‌ی اتصال همان موتور قابل‌اعتماد و متن‌باز است. هر بخش تا جای ممکن سبک نگه داشته شد تا روی هر گوشی خوب کار کند.</string>
+</resources>
