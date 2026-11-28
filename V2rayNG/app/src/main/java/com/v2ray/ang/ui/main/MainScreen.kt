@@ -9,6 +9,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,11 +50,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
@@ -85,8 +89,8 @@ private val WarnRed = Color(0xFFE5484D)
 private val OkGreen = Color(0xFF12A36B)
 
 /**
- * MatixNET: the home screen. Only the connection button, the chosen server, the subscription card with its renew
- * warning and a small settings page. Every operation goes through [onAction].
+ * MatixNET: the home screen. Only the connection button, the chosen server, the add-subscription button, the
+ * subscription card with its renew warning and a small settings page. Every operation goes through [onAction].
  */
 @Composable
 fun MainScreen(
@@ -98,6 +102,7 @@ fun MainScreen(
     val settings by MatixHomeSettings.state.collectAsStateWithLifecycle()
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var showPicker by rememberSaveable { mutableStateOf(false) }
+    var showAdd by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { onAction(MainAction.LoadHomeSettings) }
 
@@ -154,6 +159,28 @@ fun MainScreen(
         )
     }
 
+    if (showAdd) {
+        AlertDialog(
+            onDismissRequest = { showAdd = false },
+            title = { Text(stringResource(R.string.matix_add_sub)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    AddOption(R.drawable.ic_paste_24dp, stringResource(R.string.matix_paste)) {
+                        showAdd = false
+                        onAction(MainAction.ImportClipboard)
+                    }
+                    AddOption(R.drawable.ic_qu_scan_24dp, stringResource(R.string.matix_scan)) {
+                        showAdd = false
+                        onAction(MainAction.ImportQRcode)
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = { TextButton(onClick = { showAdd = false }) { Text(stringResource(R.string.action_cancel)) } },
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -167,11 +194,14 @@ fun MainScreen(
 
         ConnectCard(
             isRunning = uiState.isRunning,
+            connecting = uiState.isRunning && uiState.status is MainStatus.Connecting,
             detail = mainViewModel.formatStatus(uiState.status),
             serverName = selectedRow?.remarks,
             onToggle = { onAction(MainAction.ToggleService) },
             onPickServer = { if (rows.isNotEmpty()) showPicker = true }
         )
+
+        AddServerButton(onClick = { showAdd = true })
 
         val status = remember(usageInfo) {
             usageInfo?.let { buildMatixSubscriptionStatus(it, System.currentTimeMillis()) }
@@ -187,6 +217,48 @@ fun MainScreen(
                 onRefresh = { onAction(MainAction.UpdateGroupSubscription(group.id)) }
             )
         }
+    }
+}
+
+/** The "add server / subscription" button of the home screen: an outlined sky-blue pill. */
+@Composable
+private fun AddServerButton(onClick: () -> Unit) {
+    val primary = MaterialTheme.colorScheme.primary
+    val shape = RoundedCornerShape(16.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(52.dp)
+            .clip(shape)
+            .background(primary.copy(alpha = 0.06f))
+            .border(1.5.dp, primary.copy(alpha = 0.55f), shape)
+            .clickable(role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "+  " + stringResource(R.string.matix_add_sub),
+            color = primary,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+@Composable
+private fun AddOption(iconRes: Int, label: String, onClick: () -> Unit) {
+    val primary = MaterialTheme.colorScheme.primary
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(primary.copy(alpha = 0.08f))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(painterResource(iconRes), contentDescription = null, tint = primary, modifier = Modifier.size(24.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(label, fontSize = 16.sp, fontWeight = FontWeight.Bold)
     }
 }
 
@@ -220,6 +292,7 @@ private fun HomeHeader(onSettings: () -> Unit) {
 @Composable
 private fun ConnectCard(
     isRunning: Boolean,
+    connecting: Boolean,
     detail: String,
     serverName: String?,
     onToggle: () -> Unit,
@@ -232,7 +305,7 @@ private fun ConnectCard(
             .padding(horizontal = 18.dp, vertical = 22.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        PowerButton(isRunning = isRunning, onClick = onToggle)
+        PowerButton(isRunning = isRunning, connecting = connecting, onClick = onToggle)
         Spacer(Modifier.height(18.dp))
         Text(
             text = stringResource(if (isRunning) R.string.matix_connected else R.string.matix_not_connected),
@@ -251,7 +324,7 @@ private fun ConnectCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(18.dp))
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.08f))
                 .clickable(onClick = onPickServer)
                 .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -282,46 +355,79 @@ private fun ConnectCard(
     }
 }
 
-/** The round connect button: soft rings around it, which breathe while connected. */
+/**
+ * The round connect button. A glowing sky-blue disc with soft halos that breathe while connected, and a ring of light
+ * that spins around it while the tunnel is still on its way up.
+ */
 @Composable
-private fun PowerButton(isRunning: Boolean, onClick: () -> Unit) {
+private fun PowerButton(isRunning: Boolean, connecting: Boolean, onClick: () -> Unit) {
     val transition = rememberInfiniteTransition(label = "power")
     val breathe by transition.animateFloat(
         initialValue = 1f,
-        targetValue = 1.12f,
+        targetValue = 1.10f,
         animationSpec = infiniteRepeatable(tween(1600, easing = LinearEasing), RepeatMode.Reverse),
         label = "breathe"
     )
+    val spin by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(tween(1100, easing = LinearEasing), RepeatMode.Restart),
+        label = "spin"
+    )
     val primary = MaterialTheme.colorScheme.primary
     val label = stringResource(if (isRunning) R.string.acc_stop else R.string.acc_start)
-    Box(Modifier.size(210.dp), contentAlignment = Alignment.Center) {
+    Box(Modifier.size(220.dp), contentAlignment = Alignment.Center) {
         Box(
             Modifier
-                .size(210.dp)
+                .size(220.dp)
                 .scale(if (isRunning) breathe else 1f)
                 .clip(CircleShape)
-                .background(primary.copy(alpha = if (isRunning) 0.10f else 0.06f))
+                .background(primary.copy(alpha = if (isRunning) 0.09f else 0.05f))
         )
         Box(
             Modifier
-                .size(172.dp)
+                .size(182.dp)
                 .scale(if (isRunning) 1f + (breathe - 1f) * 0.6f else 1f)
                 .clip(CircleShape)
-                .background(primary.copy(alpha = if (isRunning) 0.16f else 0.09f))
+                .background(primary.copy(alpha = if (isRunning) 0.15f else 0.08f))
         )
+        if (connecting) {
+            Canvas(
+                Modifier
+                    .size(166.dp)
+                    .graphicsLayer { rotationZ = spin }
+            ) {
+                val width = 5.dp.toPx()
+                drawArc(
+                    brush = Brush.sweepGradient(listOf(Color.Transparent, primary)),
+                    startAngle = 0f,
+                    sweepAngle = 360f,
+                    useCenter = false,
+                    topLeft = Offset(width / 2f, width / 2f),
+                    size = Size(size.width - width, size.height - width),
+                    style = Stroke(width = width, cap = StrokeCap.Round)
+                )
+            }
+        }
         Box(
             modifier = Modifier
-                .size(136.dp)
+                .size(140.dp)
+                .shadow(
+                    elevation = if (isRunning) 22.dp else 10.dp,
+                    shape = CircleShape,
+                    ambientColor = primary,
+                    spotColor = primary
+                )
                 .clip(CircleShape)
                 .background(
                     if (isRunning) MatixBlueBrush
-                    else androidx.compose.ui.graphics.Brush.verticalGradient(listOf(Color.White, Color(0xFFE6EEFF)))
+                    else Brush.verticalGradient(listOf(Color.White, Color(0xFFE6EEFF)))
                 )
                 .clickable(role = Role.Button, onClickLabel = label, onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             val tint = if (isRunning) Color.White else primary
-            Canvas(Modifier.size(54.dp)) {
+            Canvas(Modifier.size(56.dp)) {
                 val stroke = Stroke(width = size.width * 0.11f, cap = StrokeCap.Round)
                 val inset = stroke.width / 2f
                 drawArc(
